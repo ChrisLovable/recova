@@ -1,0 +1,5 @@
+first_name,last_name,phone_mobile,email,amount,reference,debt_type
+Johan,Botha,0821234567,johan@gmail.com,2500,INV-001,invoice
+Thandi,Dlamini,0731234567,thandi@gmail.com,8750,INV-002,invoice
+Pieter,van der Merwe,0611234567,,3200,INV-003,rental
+Maria,Nkosi,0841234567,maria@gmail.com,15000,INV-004,medical

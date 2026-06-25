@@ -3,7 +3,6 @@
 // Handles CSV, Excel, PDF â€” normalises with Claude AI
 // ============================================================
 
-const fs = require('fs');
 const { parse } = require('csv-parse/sync');
 const XLSX = require('xlsx');
 const pdfParse = require('pdf-parse');
@@ -74,21 +73,9 @@ async function processUpload({ file, tenantId, userId, popiaConfirmed, columnMap
   }
 }
 
-function getUploadedFileBuffer(file) {
-  if (file && file.data && file.data.length > 0) {
-    return file.data;
-  }
-
-  if (file && file.tempFilePath && fs.existsSync(file.tempFilePath)) {
-    return fs.readFileSync(file.tempFilePath);
-  }
-
-  throw new Error('Uploaded file is empty. No buffer data or temp file path found.');
-}
-
-// ── Parse CSV ──
+// â”€â”€ Parse CSV â”€â”€
 async function parseCSV(file) {
-  const content = getUploadedFileBuffer(file).toString('utf8').replace(/^\uFEFF/, '');
+  const content = file.data.toString('utf8');
   const rows = parse(content, {
     columns: true,
     skip_empty_lines: true,
@@ -101,7 +88,7 @@ async function parseCSV(file) {
 
 // â”€â”€ Parse Excel â”€â”€
 async function parseExcel(file) {
-  const workbook = XLSX.read(getUploadedFileBuffer(file), { type: 'buffer' });
+  const workbook = XLSX.read(file.data, { type: 'buffer' });
   const sheetName = workbook.SheetNames[0];
   const sheet = workbook.Sheets[sheetName];
   const rows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
@@ -112,7 +99,7 @@ async function parseExcel(file) {
 async function parsePDF(file) {
   try {
     // First try text extraction
-    const pdfData = await pdfParse(getUploadedFileBuffer(file));
+    const pdfData = await pdfParse(file.data);
     const text = pdfData.text;
 
     if (text && text.trim().length > 100) {
@@ -120,7 +107,7 @@ async function parsePDF(file) {
       return await extractWithClaude(text, 'text');
     } else {
       // Scanned PDF â€” use Claude Vision
-      const base64 = getUploadedFileBuffer(file).toString('base64');
+      const base64 = file.data.toString('base64');
       return await extractWithClaude(base64, 'image');
     }
   } catch (err) {
@@ -411,4 +398,3 @@ async function updateJob(jobId, updates) {
 }
 
 module.exports = { processUpload };
-

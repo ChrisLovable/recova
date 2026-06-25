@@ -1,0 +1,564 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8" />
+  <title>Recova Dashboard</title>
+  <style>
+    body { font-family: Arial, sans-serif; background:#0f172a; color:#e5e7eb; margin:0; padding:30px; }
+    h1 { margin-top:0; color:#fff; }
+    .muted { color:#94a3b8; }
+    .cards { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-bottom:24px; }
+    .card, .upload-box { background:#111827; border:1px solid #334155; border-radius:14px; padding:20px; }
+    .card h2 { margin:0; font-size:15px; color:#94a3b8; }
+    .value { font-size:32px; font-weight:bold; margin-top:10px; color:#38bdf8; }
+    input[type="file"] { background:#0f172a; border:1px solid #334155; color:#e5e7eb; padding:10px; border-radius:8px; margin-right:10px; }
+    button { background:#0ea5e9; color:white; border:0; padding:11px 16px; border-radius:8px; cursor:pointer; font-weight:bold; margin-right:8px; }
+    button:hover { background:#0284c7; }
+    table { width:100%; border-collapse:collapse; background:#111827; border-radius:14px; overflow:hidden; }
+    th, td { padding:12px; border-bottom:1px solid #334155; text-align:left; font-size:14px; vertical-align:top; }
+    th { background:#1e293b; color:#cbd5e1; }
+    .status { padding:4px 8px; border-radius:999px; background:#064e3b; color:#6ee7b7; font-size:12px; }
+    .failed { background:#7f1d1d; color:#fecaca; }
+    .section { margin-top:30px; }
+    .ok { color:#6ee7b7; }
+    .bad { color:#fca5a5; }
+  </style>
+</head>
+
+<body>
+  <h1>Recova Dashboard</h1>
+  <p class="muted">AI debt collection backend MVP</p>
+
+  <div class="upload-box">
+    <h2>Upload Debtor File</h2>
+    <p class="muted">Upload CSV, Excel, or PDF debtor files. POPIA confirmation is automatically sent for MVP testing.</p>
+    <input id="fileInput" type="file" accept=".csv,.xlsx,.xls,.pdf" />
+    <button onclick="uploadFile()">Upload File</button>
+    <button onclick="loadDashboard()">Refresh</button>
+    <div id="uploadStatus" style="margin-top:12px;"></div>
+  </div>
+
+  <div class="cards" style="margin-top:24px;">
+    <div class="card"><h2>Total Debtors</h2><div id="totalDebtors" class="value">...</div></div>
+    <div class="card"><h2>Total Debts</h2><div id="totalDebts" class="value">...</div></div>
+    <div class="card"><h2>Total Balance</h2><div id="totalBalance" class="value">...</div></div>
+  </div>
+
+  <div class="section">
+    <h2>Debts</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Priority</th><th>Debtor</th><th>Phone</th><th>Reference</th><th>Type</th><th>Balance</th><th>Status</th>
+        </tr>
+      </thead>
+      <tbody id="debtRows"><tr><td colspan="7">Loading...</td></tr></tbody>
+    </table>
+  </div>
+
+  <div class="section">
+    <h2>Agent Preview</h2>
+    <p class="muted">Preview the next compliant AI call before connecting Twilio.</p>
+    <button onclick="loadNextAgentCall()">Load Next Agent Call</button>
+    <button onclick="logFakeAttempt()">Log Fake Call Attempt</button>
+<button onclick="simulateCallSession()">Simulate Full Call Session</button>
+    <div id="fakeAttemptStatus" style="margin-top:12px;"></div>
+<div id="callSessionStatus" style="margin-top:12px;"></div>
+
+<div class="upload-box" style="margin-top:16px;">
+  <h3>Controlled Call Outcomes</h3>
+  <p class="muted">Use only after creating a simulated call session.</p>
+  <button onclick="setCallOutcome('no_answer')">No Answer</button>
+  <button onclick="setCallOutcome('promise_to_pay')">Promise To Pay</button>
+  <button onclick="setCallOutcome('dispute_raised')">Dispute Raised</button>
+  <button onclick="setCallOutcome('debt_review')">Debt Review</button>
+  <button onclick="setCallOutcome('needs_human')">review by my manager</button>
+  <div id="outcomeStatus" style="margin-top:12px;"></div>
+</div>
+
+<div class="upload-box" style="margin-top:16px;">
+  <h3>AI Discussion Simulator</h3>
+  <p class="muted">Type what the debtor says. Claude replies as the Recova AI agent. No real call is made.</p>
+
+  <div id="discussionTranscript" style="background:#020617; border:1px solid #334155; padding:12px; border-radius:10px; min-height:120px; margin-bottom:12px;">
+    <span class="muted">No discussion yet.</span>
+  </div>
+
+  <input id="debtorMessageInput" type="text" placeholder="Type debtor message..." style="width:70%; padding:11px; border-radius:8px; border:1px solid #334155; background:#0f172a; color:#e5e7eb;" />
+  <button onclick="sendDebtorMessage()">Send To Claude</button>
+  <button onclick="resetDiscussion()">Reset Discussion</button>
+
+  <div id="discussionStatus" style="margin-top:12px;"></div>
+</div>
+
+<div id="agentPreview" class="upload-box" style="margin-top:16px;">
+      <span class="muted">No agent call loaded yet.</span>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Call Queue</h2>
+    <p class="muted">Debts that are currently allowed to be contacted by the AI agent.</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Priority</th><th>Debtor</th><th>Phone</th><th>Reference</th><th>Type</th><th>Balance</th><th>Channel</th><th>Contactable</th>
+        </tr>
+      </thead>
+      <tbody id="queueRows"><tr><td colspan="8">Loading...</td></tr></tbody>
+    </table>
+  </div>
+
+  
+  <div class="section">
+    <h2>Call History</h2>
+    <p class="muted">Simulated and future real call sessions recorded per debtor.</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Time</th>
+<th>Debtor</th>
+<th>Reference</th>
+<th>Phone</th>
+<th>Result</th>
+<th>Compliance</th>
+<th>Transcript</th>
+        </tr>
+      </thead>
+      <tbody id="callHistoryRows"><tr><td colspan="7">Loading...</td></tr></tbody>
+    </table>
+  </div>
+
+  <div class="section">
+    <h2>Audit Log</h2>
+    <p class="muted">Compliance and system actions recorded for traceability.</p>
+    <table>
+      <thead>
+        <tr>
+          <th>Time</th><th>Action</th><th>Entity</th><th>Result</th><th>Notes</th>
+        </tr>
+      </thead>
+      <tbody id="auditRows"><tr><td colspan="5">Loading...</td></tr></tbody>
+    </table>
+  </div>
+
+  <div class="section">
+    <h2>Upload History</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>File</th><th>Status</th><th>Total Rows</th><th>Loaded</th><th>Failed</th><th>Created</th>
+        </tr>
+      </thead>
+      <tbody id="uploadRows"><tr><td colspan="6">Loading...</td></tr></tbody>
+    </table>
+  </div>
+
+<script>
+const tenantId = "273eb226-841c-475c-a4dd-ed3ad0376332";
+let currentAgentDebtId = null;
+let currentCallSessionId = null;
+let aiDiscussionConversation = [];
+
+function money(value) {
+  return "R" + Number(value || 0).toLocaleString("en-ZA", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+}
+
+function safeArray(value) {
+  return Array.isArray(value) ? value : [];
+}
+
+async function uploadFile() {
+  const fileInput = document.getElementById("fileInput");
+  const status = document.getElementById("uploadStatus");
+
+  if (!fileInput.files || fileInput.files.length === 0) {
+    status.innerHTML = '<span class="bad">Please choose a file first.</span>';
+    return;
+  }
+
+  const formData = new FormData();
+  formData.append("file", fileInput.files[0]);
+  formData.append("tenant_id", tenantId);
+  formData.append("popia_confirmed", "true");
+
+  status.innerHTML = '<span class="muted">Uploading and processing...</span>';
+
+  try {
+    const response = await fetch("/api/upload", { method:"POST", body:formData });
+    const result = await response.json();
+
+    if (!response.ok) throw new Error(result.error || "Upload failed");
+
+    status.innerHTML = `<span class="ok">Upload complete. Loaded ${result.summary.loaded} of ${result.summary.total} rows.</span>`;
+    fileInput.value = "";
+    await loadDashboard();
+  } catch (err) {
+    status.innerHTML = `<span class="bad">${err.message}</span>`;
+  }
+}
+
+async function loadNextAgentCall() {
+  const box = document.getElementById("agentPreview");
+  box.innerHTML = '<span class="muted">Loading next agent call...</span>';
+
+  try {
+    const response = await fetch(`/api/agent/next-call?tenant_id=${tenantId}`);
+    const result = await response.json();
+
+    if (!result.next_call) {
+      box.innerHTML = `<span class="bad">${result.message || "No callable debtor found."}</span>`;
+      return;
+    }
+
+    const call = result.next_call;
+    const debtor = call.debtor;
+    const debt = call.debt;
+    const script = call.script;
+
+    currentAgentDebtId = debt.id;
+currentCallSessionId = null;
+
+    box.innerHTML = `
+      <h3>${debtor.full_name}</h3>
+      <p><strong>Phone:</strong> ${debtor.phone_mobile}</p>
+      <p><strong>Reference:</strong> ${debt.reference_number}</p>
+      <p><strong>Balance:</strong> ${money(debt.current_balance)}</p>
+      <p><strong>Compliance:</strong> <span class="status">${call.compliance.passed ? "passed" : "blocked"}</span></p>
+
+      <h3>Payment Options</h3>
+      <ol>${call.payment_options.map(o => `<li>${o.wording}</li>`).join("")}</ol>
+
+      <h3>Call Script</h3>
+      <p><strong>Opening:</strong> ${script.phase_1_opening}</p>
+      <p><strong>Privacy:</strong> ${script.phase_2_privacy}</p>
+      <p><strong>Reason:</strong> ${script.phase_3_reason_for_call}</p>
+      <p><strong>Empathy:</strong> ${script.phase_4_empathy}</p>
+      <p><strong>Close:</strong> ${script.phase_6_close}</p>
+      <p><strong>Payment Link:</strong> ${script.phase_7_payment_link}</p>
+
+      <h3>Prohibited</h3>
+      <ul>${script.prohibited.map(p => `<li>${p}</li>`).join("")}</ul>
+    `;
+  } catch (err) {
+    box.innerHTML = `<span class="bad">${err.message}</span>`;
+  }
+}
+
+async function logFakeAttempt() {
+  const status = document.getElementById("fakeAttemptStatus");
+
+  if (!currentAgentDebtId) {
+    status.innerHTML = '<span class="bad">Load an agent call first.</span>';
+    return;
+  }
+
+  status.innerHTML = '<span class="muted">Logging fake call attempt...</span>';
+
+  try {
+    const response = await fetch("/api/agent/fake-attempt", {
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body:JSON.stringify({
+        debt_id: currentAgentDebtId,
+        outcome: "dashboard_fake_attempt"
+      })
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) throw new Error(result.error || "Could not log fake attempt");
+
+    status.innerHTML = `<span class="ok">Fake call attempt logged for ${result.debtor.full_name}. No real call was made.</span>`;
+    await loadDashboard();
+  } catch (err) {
+    status.innerHTML = `<span class="bad">${err.message}</span>`;
+  }
+}
+
+
+async function simulateCallSession() {
+  const status = document.getElementById("callSessionStatus");
+
+  if (!currentAgentDebtId) {
+    status.innerHTML = '<span class="bad">Load an agent call first.</span>';
+    return;
+  }
+
+  status.innerHTML = '<span class="muted">Creating simulated call session...</span>';
+
+  try {
+    const response = await fetch("/api/calls/simulate", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        debt_id: currentAgentDebtId,
+        result: "dashboard_simulated_call"
+      })
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.error || "Could not simulate call session");
+    }
+
+        currentCallSessionId = result.call_session.id;
+
+    status.innerHTML = `
+      <span class="ok">
+        Simulated call session created for ${result.debtor.full_name}. No real call was made.
+      </span>
+    `;
+
+    await loadDashboard();
+
+  } catch (err) {
+    status.innerHTML = `<span class="bad">${err.message}</span>`;
+  }
+}
+
+
+async function setCallOutcome(outcome) {
+  const status = document.getElementById("outcomeStatus");
+
+  if (!currentCallSessionId) {
+    status.innerHTML = '<span class="bad">Create a simulated call session first.</span>';
+    return;
+  }
+
+  let body = {
+    call_session_id: currentCallSessionId,
+    outcome
+  };
+
+  if (outcome === "promise_to_pay") {
+    const amount = prompt("Promise amount? Example: 5000");
+    const date = prompt("Promise date? Use YYYY-MM-DD");
+
+    body.promise_amount = amount ? Number(amount) : null;
+    body.promise_date = date || null;
+  }
+
+  if (outcome === "dispute_raised") {
+    body.notes = prompt("Brief dispute reason?") || "Dispute raised during call";
+  }
+
+  if (outcome === "debt_review") {
+    body.notes = prompt("Debt review note or case number, if available?") || "Debtor indicated debt review";
+  }
+
+  if (outcome === "manager_review") {
+    body.notes = prompt("Why does this need human review?") || "review by my manager review";
+  }
+
+  status.innerHTML = '<span class="muted">Recording outcome...</span>';
+
+  try {
+    const response = await fetch("/api/calls/outcome", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(body)
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.error || "Could not record outcome");
+    }
+
+    status.innerHTML = `<span class="ok">${result.message}</span>`;
+
+    await loadDashboard();
+
+  } catch (err) {
+    status.innerHTML = `<span class="bad">${err.message}</span>`;
+  }
+}
+
+
+function renderDiscussion() {
+  const box = document.getElementById("discussionTranscript");
+
+  if (!aiDiscussionConversation.length) {
+    box.innerHTML = '<span class="muted">No discussion yet.</span>';
+    return;
+  }
+
+  box.innerHTML = aiDiscussionConversation.map(m => {
+    const label = m.role === "user" ? "Debtor" : "AI Agent";
+    return `<p><strong>${label}:</strong> ${m.content}</p>`;
+  }).join("");
+}
+
+function resetDiscussion() {
+  aiDiscussionConversation = [];
+  document.getElementById("debtorMessageInput").value = "";
+  document.getElementById("discussionStatus").innerHTML = "";
+  renderDiscussion();
+}
+
+async function sendDebtorMessage() {
+  const input = document.getElementById("debtorMessageInput");
+  const status = document.getElementById("discussionStatus");
+  const message = input.value.trim();
+
+  if (!currentAgentDebtId) {
+    status.innerHTML = '<span class="bad">Load an agent call first.</span>';
+    return;
+  }
+
+  if (!message) {
+    status.innerHTML = '<span class="bad">Type a debtor message first.</span>';
+    return;
+  }
+
+  status.innerHTML = '<span class="muted">Claude is thinking...</span>';
+
+  try {
+    const response = await fetch("/api/discussion-sim/reply", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        debt_id: currentAgentDebtId,
+        debtor_message: message,
+        conversation: aiDiscussionConversation
+      })
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) {
+      throw new Error(result.error || "Claude simulation failed");
+    }
+
+    aiDiscussionConversation.push({
+      role: "user",
+      content: message
+    });
+
+    aiDiscussionConversation.push({
+      role: "assistant",
+      content: result.ai.reply
+    });
+
+    input.value = "";
+    renderDiscussion();
+
+    const outcome = result.ai.recommended_outcome || "continue";
+    const stopText = result.ai.should_stop ? "STOP" : "continue";
+    const managerText = result.ai.manager_review ? " | Manager review required" : "";
+
+    status.innerHTML = `
+      <span class="ok">Outcome: ${outcome} | ${stopText}${managerText}</span>
+      <br />
+      <span class="muted">Notes: ${result.ai.notes || ""}</span>
+    `;
+
+  } catch (err) {
+    status.innerHTML = `<span class="bad">${err.message}</span>`;
+  }
+}
+
+async function loadDashboard() {
+  const debtsRes = await fetch(`/api/debts?tenant_id=${tenantId}`);
+  const debts = safeArray(await debtsRes.json());
+
+  const debtorsRes = await fetch(`/api/debtors?tenant_id=${tenantId}`);
+  const debtors = safeArray(await debtorsRes.json());
+
+  const jobsRes = await fetch(`/api/upload/jobs?tenant_id=${tenantId}`);
+  const jobs = safeArray(await jobsRes.json());
+
+  const queueRes = await fetch(`/api/call-queue?tenant_id=${tenantId}`);
+  const queue = safeArray(await queueRes.json());
+
+    const auditRes = await fetch(`/api/audit?tenant_id=${tenantId}`);
+  const audit = safeArray(await auditRes.json());
+
+  const callHistoryRes = await fetch(`/api/calls/history-detailed?tenant_id=${tenantId}`);
+  const callHistory = safeArray(await callHistoryRes.json());
+
+  document.getElementById("totalDebtors").innerText = debtors.length;
+  document.getElementById("totalDebts").innerText = debts.length;
+  document.getElementById("totalBalance").innerText = money(debts.reduce((sum, d) => sum + Number(d.current_balance || 0), 0));
+
+  document.getElementById("debtRows").innerHTML = debts.map(d => `
+    <tr>
+      <td>${d.priority_score || 0}</td>
+      <td>${d.debtor?.full_name || "Unknown"}</td>
+      <td>${d.debtor?.phone_mobile || ""}</td>
+      <td>${d.reference_number || ""}</td>
+      <td>${d.debt_type || ""}</td>
+      <td>${money(d.current_balance)}</td>
+      <td><span class="status">${d.status}</span></td>
+    </tr>
+  `).join("");
+
+  document.getElementById("queueRows").innerHTML = queue.map(q => `
+    <tr>
+      <td>${q.priority_score || 0}</td>
+      <td>${q.debtor_name || "Unknown"}</td>
+      <td>${q.phone_mobile || ""}</td>
+      <td>${q.reference_number || ""}</td>
+      <td>${q.debt_type || ""}</td>
+      <td>${money(q.current_balance)}</td>
+      <td>${q.suggested_channel || "voice"}</td>
+      <td><span class="status">${q.contactable ? "yes" : "no"}</span></td>
+    </tr>
+  `).join("");
+
+    document.getElementById("callHistoryRows").innerHTML = callHistory.map(c => `
+    <tr>
+      <td>${new Date(c.created_at).toLocaleString()}</td>
+      <td>${c.debtor?.full_name || "Unknown"}</td>
+      <td>${c.debt?.reference_number || ""}</td>
+      <td>${c.phone_number_called || ""}</td>
+      <td>${c.latest_attempt?.result || c.outcome || "session_created"}</td>
+      <td><span class="status">${c.compliance_score || c.scoring?.overall_compliance_score || 0}</span></td>
+      <td>${c.transcript || ""}</td>
+    </tr>
+  `).join("");
+
+  document.getElementById("auditRows").innerHTML = audit.map(a => `
+    <tr>
+      <td>${new Date(a.created_at).toLocaleString()}</td>
+      <td>${a.action || ""}</td>
+      <td>${a.entity_type || ""}</td>
+      <td><span class="status">${a.result || "success"}</span></td>
+      <td>${a.notes || ""}</td>
+    </tr>
+  `).join("");
+
+  document.getElementById("uploadRows").innerHTML = jobs.map(j => `
+    <tr>
+      <td>${j.filename}</td>
+      <td><span class="status ${j.status === "failed" ? "failed" : ""}">${j.status}</span></td>
+      <td>${j.total_rows}</td>
+      <td>${j.parsed_rows}</td>
+      <td>${j.failed_rows}</td>
+      <td>${new Date(j.created_at).toLocaleString()}</td>
+    </tr>
+  `).join("");
+}
+
+loadDashboard().catch(err => {
+  document.body.innerHTML += `<pre style="color:#f87171">${err.message}</pre>`;
+});
+</script>
+</body>
+</html>
+
+
+
+
+
