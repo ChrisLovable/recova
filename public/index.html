@@ -62,6 +62,7 @@
     <button onclick="loadNextAgentCall()">Load Next Agent Call</button>
     <button onclick="logFakeAttempt()">Log Fake Call Attempt</button>
 <button onclick="simulateCallSession()">Simulate Full Call Session</button>
+<button onclick="callMe()" style="background:#16a34a;">Call Me Now</button>
     <div id="fakeAttemptStatus" style="margin-top:12px;"></div>
 <div id="callSessionStatus" style="margin-top:12px;"></div>
 
@@ -279,6 +280,35 @@ async function logFakeAttempt() {
   }
 }
 
+
+
+async function callMe() {
+  if (!currentAgentDebtId) {
+    alert("Load an agent call first.");
+    return;
+  }
+
+  const confirmed = confirm("This will make a REAL phone call to your verified number. Continue?");
+  if (!confirmed) return;
+
+  try {
+    const response = await fetch("/api/twilio/call-me", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ debt_id: currentAgentDebtId })
+    });
+
+    const result = await response.json();
+
+    if (!response.ok) throw new Error(result.error || "Call failed");
+
+    alert("Your phone should ring within 15 seconds. Call SID: " + result.call_sid);
+    await loadDashboard();
+
+  } catch (err) {
+    alert("Call failed: " + err.message);
+  }
+}
 
 async function simulateCallSession() {
   const status = document.getElementById("callSessionStatus");
@@ -557,6 +587,7 @@ loadDashboard().catch(err => {
 </script>
 </body>
 </html>
+
 
 
 
