@@ -43,6 +43,7 @@ app.use('/api/audit', require('./routes/audit'));
 app.use('/api/calls', require('./routes/calls'));
 app.use('/api/discussion-sim', require('./routes/discussionSim'));
 app.use('/api/twilio', require('./routes/twilioTest'));
+app.use('/api/sms', require('./routes/sms'));
 app.use('/api/health', require('./routes/health'));
 
 // 404
@@ -65,6 +66,7 @@ app.listen(PORT, () => {
 });
 
 module.exports = app;
+
 
 
 
